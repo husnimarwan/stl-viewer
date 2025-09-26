@@ -84,26 +84,38 @@ const parseASCIISTL = (text) => {
   return geometry;
 };
 
-// Component to adjust camera based on model size
-function CameraController({ modelSize, modelCenter, fitted, setFitted }) {
-  const { camera } = useThree();
+// Component to adjust camera based on mesh bounds
+function CameraController({ meshRef, fitted, setFitted, fileName }) {
+  const { camera, scene } = useThree();
   
   useEffect(() => {
-    if (modelSize && modelCenter && !fitted) {
-      // Calculate the maximum dimension to determine camera distance
-      const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);
-      // Calculate distance based on model size to fit in view
-      const distance = maxDim * 2.5; // Adjust this multiplier as needed
+    if (meshRef.current && !fitted) {
+      // Create a bounding box for the mesh
+      const boundingBox = new THREE.Box3().setFromObject(meshRef.current);
+      const size = new THREE.Vector3();
+      boundingBox.getSize(size);
       
-      // Position the camera to look at the center of the model
-      camera.position.set(distance, distance, distance);
-      camera.lookAt(0, 0, 0); // Look at origin since model is centered there
+      // Calculate the maximum dimension to determine camera distance
+      const maxDim = Math.max(size.x, size.y, size.z);
+      
+      // Calculate distance based on model size with good margins
+      const distance = maxDim * 3; // Multiplier to ensure object fits with good margins
+      
+      // Get center of the bounding box
+      const center = new THREE.Vector3();
+      boundingBox.getCenter(center);
+      
+      // Position and orient the camera
+      const direction = new THREE.Vector3(1, 1, 1).normalize();
+      direction.multiplyScalar(distance);
+      camera.position.copy(center.clone().add(direction));
+      camera.lookAt(center);
       camera.updateProjectionMatrix();
       
       // Mark as fitted to prevent repeated adjustments
-      setTimeout(() => setFitted(true), 100); // Small delay to ensure update
+      setTimeout(() => setFitted(true), 100);
     }
-  }, [modelSize, modelCenter, fitted, camera, setFitted]);
+  }, [meshRef, fitted, fileName, camera]);
 
   return null;
 }
@@ -134,10 +146,9 @@ function STLViewer() {
   const [mesh, setMesh] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState('');
-  const [modelSize, setModelSize] = useState(null);
-  const [modelCenter, setModelCenter] = useState(null);
   const [fitted, setFitted] = useState(false);
   const fileInputRef = useRef(null);
+  const meshRef = useRef();
 
   // Function to handle file upload
   const handleFileUpload = (event) => {
@@ -160,21 +171,8 @@ function STLViewer() {
         const contents = e.target.result;
         const geometry = parseSTL(contents);
         
-        // Calculate model size and center for auto-adjusting camera
-        geometry.computeBoundingBox();
-        const box = geometry.boundingBox;
-        if (box) {
-          const size = new THREE.Vector3();
-          box.getSize(size);
-          setModelSize(size);
-          
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-          setModelCenter(center);
-        }
-        
         setMesh(geometry);
-        setFitted(false); // Reset fitted flag
+        setFitted(false); // Reset fitted flag when new file is loaded
         setLoading(false);
       } catch (error) {
         console.error('Error parsing STL file:', error);
@@ -196,12 +194,12 @@ function STLViewer() {
     }
   };
 
-  // Reset fitted flag when a new model is loaded
+  // Reset fitted flag when a new file is uploaded
   useEffect(() => {
-    if (modelSize && modelCenter) {
+    if (fileName) {
       setFitted(false);
     }
-  }, [modelSize, modelCenter]);
+  }, [fileName]);
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -261,13 +259,12 @@ function STLViewer() {
           camera={{ position: [0, 0, 5], fov: 50 }} 
           style={{ background: 'linear-gradient(to bottom, #3498db, #ecf0f1)', width: '100%', height: '100%' }}
         >
-          <CameraController modelSize={modelSize} modelCenter={modelCenter} fitted={fitted} setFitted={setFitted} />
           <ambientLight intensity={0.5} />
           <pointLight position={[10, 10, 10]} intensity={1} />
           <directionalLight position={[-10, -10, -10]} intensity={0.5} />
           
           {mesh && (
-            <mesh geometry={mesh} position={[-(modelCenter?.x || 0), -(modelCenter?.y || 0), -(modelCenter?.z || 0) ]}>
+            <mesh ref={meshRef} geometry={mesh}>
               <meshPhongMaterial 
                 color="#3498db" 
                 wireframe={false} 
@@ -303,9 +300,20 @@ function STLViewer() {
             enablePan={true} 
             enableZoom={true} 
             enableRotate={true}
-            minDistance={1}
-            maxDistance={20}
+            minDistance={0.1}
+            maxDistance={1000} // Much larger max distance to accommodate large models
+            makeDefault // Make this the default camera controller
+            mouseButtons={{
+              LEFT: THREE.MOUSE.ROTATE,
+              MIDDLE: THREE.MOUSE.PAN,
+              RIGHT: THREE.MOUSE.ZOOM
+            }}
+            touches={{
+              ONE: THREE.TOUCH.ROTATE,
+              TWO: THREE.TOUCH.ZOOM
+            }}
           />
+          <CameraController meshRef={meshRef} fitted={fitted} setFitted={setFitted} fileName={fileName} />
         </Canvas>
       </div>
 
