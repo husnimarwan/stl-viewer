@@ -204,7 +204,7 @@ function STLViewer() {
   }, [modelSize, modelCenter]);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
       <header style={{ 
         padding: '1rem', 

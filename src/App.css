@@ -6,12 +6,13 @@
 
 html, body {
   height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
 #root {
-  height: 100vh;
-  width: 100vw;
+  height: 100vh !important;
+  width: 100vw !important;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -59,4 +60,11 @@ html, body {
   top: 10px !important;
   left: 10px !important;
   z-index: 100 !important;
+}
+
+/* Remove default padding from the main container */
+#root > div {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
